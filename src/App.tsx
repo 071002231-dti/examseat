@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as XLSX from 'xlsx';
 import { 
   Users, 
   DoorOpen, 
@@ -44,6 +45,34 @@ export default function App() {
 
   const [newStudent, setNewStudent] = useState({ nim: '', name: '', subject: '', className: '' });
   const [newRoom, setNewRoom] = useState({ name: '', capacity: '' });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const data = new Uint8Array(event.target?.result as ArrayBuffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet) as any[];
+
+      const importedStudents: Student[] = jsonData.map((row, idx) => ({
+        id: `imported-${Date.now()}-${idx}`,
+        nim: String(row.NIM || row.nim || ''),
+        name: String(row.Nama || row.name || row.Name || ''),
+        subject: String(row.MK || row.subject || row.Subject || ''),
+        className: String(row.Kelas || row.class || row.Class || row.className || ''),
+      })).filter(s => s.nim && s.name);
+
+      if (importedStudents.length > 0) {
+        setStudents(prev => [...prev, ...importedStudents]);
+        alert(`Successfully imported ${importedStudents.length} students!`);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   useEffect(() => {
     localStorage.setItem('sipeka_students', JSON.stringify(students));
@@ -503,8 +532,27 @@ export default function App() {
 
               <div className="col-span-12 lg:col-span-8 bg-white border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                  <h3 className="text-[10px] font-black uppercase tracking-widest">Active Database Index</h3>
-                  <span className="bg-slate-900 text-white text-[9px] px-2 py-0.5 font-bold">{students.length} ROWS</span>
+                  <div>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest">Active Database Index</h3>
+                    <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase">Format Excel: NIM, Nama, MK, Kelas</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="file" 
+                      accept=".xlsx, .xls, .csv" 
+                      onChange={handleFileUpload} 
+                      className="hidden" 
+                      ref={fileInputRef} 
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-slate-900 transition-colors"
+                    >
+                      <Plus size={12} />
+                      Import Excel
+                    </button>
+                    <span className="bg-slate-900 text-white text-[9px] px-2 py-1.5 font-bold">{students.length} ROWS</span>
+                  </div>
                 </div>
                 <div className="max-h-[600px] overflow-y-auto">
                   <table className="w-full text-left text-sm border-collapse">
@@ -608,84 +656,6 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'excel' && (
-            <motion.div
-              key="excel"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              className="grid grid-cols-12 gap-8"
-            >
-              <div className="col-span-4 flex flex-col gap-6">
-                <div className="bg-white border border-slate-200 p-6 shadow-sm border-l-4 border-l-slate-900">
-                  <h3 className="text-[10px] font-black uppercase text-slate-400 mb-6 tracking-widest">System Logic Flow</h3>
-                  <ul className="space-y-6">
-                    {[
-                      { step: '01', title: 'Group & Sort', desc: 'Process by MK+Class, internal SORT on NIM ascending.' },
-                      { step: '02', title: 'Spatial Mapping', desc: 'Iterate through Sequential Room IDs based on load limits.' },
-                      { step: '03', title: 'Coordinate Calc', desc: 'Execute MOD logic for exact seat position in grid.' }
-                    ].map((item) => (
-                      <li key={item.step} className="flex gap-4">
-                        <span className="flex-none w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black">{item.step}</span>
-                        <div>
-                          <p className="text-sm font-black uppercase tracking-tighter">{item.title}</p>
-                          <p className="text-xs text-slate-500 font-medium leading-relaxed">{item.desc}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="bg-indigo-50 border-l-4 border-indigo-600 p-6">
-                   <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-900 mb-4 underline decoration-2 underline-offset-4">Primary Engine Logarithm</h3>
-                   <code className="block bg-white p-4 border border-indigo-100 text-[10px] font-mono leading-relaxed text-indigo-800 break-words">
-                      =LET(<br/>
-                      &nbsp;&nbsp;s, SORT(MHS_DATA, 1, 1),<br/>
-                      &nbsp;&nbsp;room, XLOOKUP(SEQ, LOAD_CAP, RUANG_ID,, 1),<br/>
-                      &nbsp;&nbsp;pos, MOD(SEQ-1, ROM_CAP) + 1,<br/>
-                      &nbsp;&nbsp;HSTACK(s, room, pos)<br/>
-                      )
-                   </code>
-                </div>
-              </div>
-
-              <div className="col-span-8 space-y-6">
-                <div className="bg-white border border-slate-200 p-8">
-                  <div className="flex items-center gap-4 mb-10">
-                    <div className="w-16 h-16 bg-slate-900 text-white flex items-center justify-center">
-                      <FileSpreadsheet size={32} />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-black uppercase tracking-tighter italic">Excel Formula <span className="text-indigo-600">Schematic</span></h2>
-                      <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Office 365 Dynamic Array Environment Only</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6">
-                    {[
-                      { id: '1', title: 'Group Counter', formula: '=COUNTIFS($A$2:A2, A2)', color: 'border-l-indigo-600' },
-                      { id: '2', title: 'Ruang Lookup', formula: '=XLOOKUP(ID, RUANG[KAP], RUANG[NO])', color: 'border-l-indigo-300' },
-                      { id: '3', title: 'Seat Modulo', formula: '=MOD(ID-1, MAX_CAP) + 1', color: 'border-l-slate-900' },
-                      { id: '4', title: 'Array Split', formula: '=CHOOSECOLS(DATA, 1, 3, 5)', color: 'border-l-slate-300' }
-                    ].map(f => (
-                      <div key={f.id} className={`p-5 bg-slate-50 border border-slate-200 border-l-4 ${f.color}`}>
-                        <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">{f.title}</p>
-                        <code className="block text-[11px] font-mono text-slate-700">{f.formula}</code>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-10 p-6 bg-slate-900 text-white">
-                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">Protocol: Large Data Handling</p>
-                     <p className="text-xs font-medium leading-relaxed opacity-80">
-                        Stability confirmed up to <strong>50,000 entities</strong>. For optimal calculation speed, ensure all data is formatted as 
-                        <strong> Structured Tables (Ctrl+T)</strong> within the XLSX container.
-                     </p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
         </AnimatePresence>
       </main>
 
